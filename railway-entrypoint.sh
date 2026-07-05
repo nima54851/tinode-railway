@@ -30,16 +30,11 @@ elif [ -n "$DATABASE_URL" ]; then
 fi
 
 # CRITICAL: init-db requires RESET_DB and UPGRADE_DB to be set to valid values
-# If unset, init-db tries to parse empty string as boolean and fails
 export RESET_DB="${RESET_DB:-false}"
 export UPGRADE_DB="${UPGRADE_DB:-false}"
-export NO_DB_INIT="${NO_DB_INIT:-false}"
 
 # Default SMTP host URL
 export SMTP_HOST_URL="${SMTP_HOST_URL:-https://tinode-chat-production.up.railway.app}"
-
-# Skip sample data loading on Railway
-export SAMPLE_DATA=""
 
 # Delegate to the official entrypoint
 exec /opt/tinode/entrypoint.sh "$@"
