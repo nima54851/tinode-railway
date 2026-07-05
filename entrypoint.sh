@@ -1,133 +1,146 @@
 #!/bin/bash
-set -e
 
-echo "=== Tinode Railway Entrypoint ==="
+# If EXT_CONFIG is set, use it as a config file.
+if [ ! -z "$EXT_CONFIG" ] ; then
+	CONFIG="$EXT_CONFIG"
 
-# Railway provides DATABASE_URL for PostgreSQL
-# Format: postgresql://user:password@host:port/dbname
-if [ ! -z "$DATABASE_URL" ]; then
-  echo "DATABASE_URL detected, configuring PostgreSQL connection..."
-  # DATABASE_URL already has the right format, just ensure sslmode
-  if echo "$DATABASE_URL" | grep -q "sslmode"; then
-    POSTGRES_DSN="$DATABASE_URL"
-  else
-    POSTGRES_DSN="${DATABASE_URL}?sslmode=disable&connect_timeout=10"
-  fi
-  
-  # Replace the DSN in the config
-  sed -i "s|PLACEHOLDER_DSN|${POSTGRES_DSN}|g" /opt/tinode/tinode.conf.template 2>/dev/null || true
-  
-  # Create the actual config
-  cat > /opt/tinode/tinode.conf << 'CONFEOF'
-{
-  "listen": ":6060",
-  "api_path": "/",
-  "static_mount": "./static",
-  "cache_control": 39600,
-  "ws_compression_disabled": false,
-  "use_x_forwarded_for": true,
-  "default_country_code": "",
-  "max_message_size": 262144,
-  "max_subscriber_count": 128,
-  "max_tag_count": 16,
-  "permanent_accounts": false,
-  "expvar": "/debug/vars",
-  "server_status": "/debug/status",
-  "auth_config": {
-    "basic": {
-      "add_to_tags": true,
-      "min_login_length": 4,
-      "min_password_length": 6
-    },
-    "token": {
-      "expire_in": 1209600,
-      "serial_num": 1,
-      "key": "wfaY2RgF2S1OQI/ZlK+LSrp1KB2jwAdGAIHQ7JZn+Kc="
-    },
-    "code": {
-      "expire_in": 900,
-      "max_retries": 3,
-      "code_length": 6
-    }
-  },
-  "store_config": {
-    "uid_key": "la6YsO+bNX/+XIkOqc5Svw==",
-    "max_results": 1024,
-    "use_adapter": "postgres",
-    "adapters": {
-      "postgres": {
-        "dsn": "DSN_PLACEHOLDER",
-        "max_open_conns": 50,
-        "max_idle_conns": 10,
-        "conn_max_lifetime": 60,
-        "sql_timeout": 10
-      }
-    }
-  },
-  "acc_gc_config": {
-    "enabled": true,
-    "gc_period": 3600,
-    "gc_block_size": 10,
-    "gc_min_account_age": 30
-  },
-  "media": {
-    "use_handler": "fs",
-    "max_size": 8388608,
-    "gc_period": 60,
-    "gc_block_size": 100,
-    "handlers": {
-      "fs": {
-        "upload_dir": "uploads",
-        "cache_control": "max-age=86400",
-        "cors_origins": ["*"]
-      }
-    }
-  }
-}
-CONFEOF
+	# Enable push notifications.
+	if [ ! -z "$FCM_SENDER_ID" ] ; then
+		FCM_PUSH_ENABLED=true
+	fi
 
-  # Replace DSN placeholder with actual connection string
-  ESCAPED_DSN=$(echo "$POSTGRES_DSN" | sed 's/[\/&]/\\&/g')
-  sed -i "s|DSN_PLACEHOLDER|${ESCAPED_DSN}|g" /opt/tinode/tinode.conf
-  echo "Config written."
 else
-  echo "ERROR: DATABASE_URL not set. Railway PostgreSQL plugin must be enabled."
-  echo "Add a PostgreSQL plugin to this service in Railway dashboard."
-  exit 1
+	CONFIG=working.config
+
+	# Remove the old config.
+	rm -f working.config
+
+	# The 'alldbs' is not a valid adapter name.
+	if [ "$TARGET_DB" = "alldbs" ] ; then
+		TARGET_DB=
+	fi
+
+	# Enable email verification if $SMTP_SERVER is defined.
+	if [ ! -z "$SMTP_SERVER" ] ; then
+		EMAIL_VERIFICATION_REQUIRED='"auth"'
+	fi
+
+	# Enable TLS (httpS).
+	if [ ! -z "$TLS_DOMAIN_NAME" ] ; then
+		TLS_ENABLED=true
+	fi
+
+	# Enable push notifications.
+	if [ ! -z "$FCM_CRED_FILE" ] ; then
+		FCM_PUSH_ENABLED=true
+	fi
+
+	if [ ! -z "$TNPG_AUTH_TOKEN" ] ; then
+		TNPG_PUSH_ENABLED=true
+	fi
+
+	if [ ! -z "$ICE_SERVERS_FILE" ] ; then
+		WEBRTC_ENABLED=true
+	fi
+
+	# Generate a new 'working.config' from template and environment
+	while IFS='' read -r line || [[ -n $line ]] ; do
+		while [[ "$line" =~ (\$[A-Z_][A-Z_0-9]*) ]] ; do
+			LHS=${BASH_REMATCH[1]}
+			RHS="$(eval echo "\"$LHS\"")"
+			line=${line//$LHS/"$RHS"}
+		done
+		echo "$line" >> working.config
+	done < config.template
 fi
 
-# Wait for database to be ready
-echo "Waiting for PostgreSQL to be ready..."
-HOST=$(echo "$DATABASE_URL" | sed -E 's|.*@([^:]+):([0-9]+)/.*|\1 \2|')
-DB_HOST=$(echo "$HOST" | awk '{print $1}')
-DB_PORT=$(echo "$HOST" | awk '{print $2}')
+# If external static dir is defined, use it.
+# Otherwise, fall back to "./static".
+if [ ! -z "$EXT_STATIC_DIR" ] ; then
+	STATIC_DIR=$EXT_STATIC_DIR
+else
+	STATIC_DIR="./static"
+fi
 
-if [ -z "$DB_PORT" ]; then DB_PORT=5432; fi
+# Do not load data when upgrading database.
+if [ "$UPGRADE_DB" = "true" ] ; then
+	SAMPLE_DATA=
+fi
 
-until nc -z -w10 "$DB_HOST" "$DB_PORT" 2>/dev/null; do
-  echo "  Waiting for $DB_HOST:$DB_PORT..."
-  sleep 3
-done
-echo "PostgreSQL is ready."
+# If push notifications are enabled, generate client-side firebase config file.
+if [ ! -z "$FCM_PUSH_ENABLED" ] || [ ! -z "$TNPG_PUSH_ENABLED" ] ; then
+	# Write client config to $STATIC_DIR/firebase-init.js
+	cat > $STATIC_DIR/firebase-init.js <<- EOM
+const FIREBASE_INIT = {
+  apiKey: "$FCM_API_KEY",
+  appId: "$FCM_APP_ID",
+  messagingSenderId: "$FCM_SENDER_ID",
+  projectId: "$FCM_PROJECT_ID",
+  messagingVapidKey: "$FCM_VAPID_KEY",
+  measurementId: "$FCM_MEASUREMENT_ID"
+};
+EOM
+else
+	# Create an empty firebase-init.js
+	echo "" > $STATIC_DIR/firebase-init.js
+fi
 
-# Initialize database
-echo "Initializing database..."
-/opt/tinode/init-db \
-  --reset=false \
-  --upgrade=false \
-  --config=/opt/tinode/tinode.conf \
-  --no_init=false 2>&1 | head -5
+if [ ! -z "$IOS_UNIV_LINKS_APP_ID" ] ; then
+	# Write config to $STATIC_DIR/apple-app-site-association config file.
+	# See https://developer.apple.com/library/archive/documentation/General/Conceptual/AppSearch/UniversalLinks.html for details.
+	cat > $STATIC_DIR/apple-app-site-association <<- EOM
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "$IOS_UNIV_LINKS_APP_ID",
+        "paths": [ "*" ]
+      }
+    ]
+  }
+}
+EOM
+fi
 
-# Create admin user
-echo "Creating admin user..."
-/opt/tinode/init-db \
-  --add_root="admin:admin123" \
-  --config=/opt/tinode/tinode.conf 2>&1 | head -3 || true
+# Wait for database if needed.
+if [ ! -z "$WAIT_FOR" ] ; then
+	IFS=':' read -ra DB <<< "$WAIT_FOR"
+	if [ ${#DB[@]} -ne 2 ]; then
+		echo "\$WAIT_FOR (${WAIT_FOR}) env var should be in form HOST:PORT"
+		exit 1
+	fi
+	until nc -z -v -w5 ${DB[0]} ${DB[1]}; do echo "waiting for ${WAIT_FOR}..."; sleep 3; done
+fi
 
-echo "=== Starting Tinode server on port 6060 ==="
+# Initialize the database if it has not been initialized yet or if data reset/upgrade has been requested.
+init_stdout=./init-db-stdout.txt
+./init-db \
+	--reset=${RESET_DB} \
+	--upgrade=${UPGRADE_DB} \
+	--config=${CONFIG} \
+	--data=${SAMPLE_DATA} \
+	--no_init=${NO_DB_INIT} \
+	1>${init_stdout}
+if [ $? -ne 0 ]; then
+	echo "./init-db failed. Quitting."
+	exit 1
+fi
 
-# Run the server
-exec /opt/tinode/tinode \
-  --config=/opt/tinode/tinode.conf \
-  --static_data=/opt/tinode/static \
-  2>&1
+# If sample data was provided, try to find Tino password.
+if [ ! -z "$SAMPLE_DATA" ] ; then
+	grep "usr;tino;" $init_stdout > /botdata/tino-password
+fi
+
+if [ -s /botdata/tino-password ] ; then
+	# Convert Tino's authentication credentials into a cookie file.
+
+	# /botdata/tino-password could be empty if DB was not updated. In such a case the
+	# /botdata/.tn-cookie will not be modified.
+	./credentials.sh /botdata/.tn-cookie < /botdata/tino-password
+fi
+
+args=("--config=${CONFIG}" "--static_data=$STATIC_DIR" "--cluster_self=$CLUSTER_SELF" "--pprof_url=$PPROF_URL")
+
+# Run the tinode server.
+./tinode "${args[@]}" 2>> /var/log/tinode.log
