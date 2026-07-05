@@ -1,43 +1,48 @@
 #!/bin/bash
 # Custom entrypoint for Railway deployment
-# Parses DATABASE_URL to extract PostgreSQL connection info
+# Uses Railway's standard PostgreSQL environment variables
 
 set -e
 
-# Parse DATABASE_URL to set POSTGRES_DSN
-# Expected format: postgresql://user:password@host:port/dbname?params
-if [ -n "$DATABASE_URL" ]; then
-    # Remove leading 'postgresql://' or 'postgres://'
-    URI="${DATABASE_URL#*://}"
+# Use Railway's standard PG* environment variables to build POSTGRES_DSN
+# These are automatically set when a Postgres database is linked
+if [ -n "$PGHOST" ]; then
+    export POSTGRES_DSN="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE}"
+    if [ -n "$PGSSLMODE" ]; then
+        export POSTGRES_DSN="${POSTGRES_DSN}?sslmode=${PGSSLMODE}"
+    fi
+    echo "[Railway init] Using Railway PG* env vars -> POSTGRES_DSN=$POSTGRES_DSN"
+elif [ -n "$DATABASE_URL" ]; then
+    # Fallback: parse DATABASE_URL manually
+    # Format: postgresql://user:pass@host:port/db?params
+    URI="${DATABASE_URL#*://}"          # remove "postgresql://"
+    USERPASS="${URI%%@*}"               # user:pass
+    HOSTPATH="${URI#*@}"               # host:port/db?params
     
-    # Split at '@' to get user:pass and host:port/db
-    AUTH="${URI%%@*}"
-    REST="${URI#*@}"
+    # Split host and port
+    if [[ "$HOSTPATH" == *":"*"/"* ]]; then
+        HOST="${HOSTPATH%%:*}"          # before first :
+        REST="${HOSTPATH#*:}"          # after first :
+        PORT="${REST%%/*}"             # before first /
+        DBPATH="${REST#*/}"           # after first /
+    elif [[ "$HOSTPATH" == *"/"* ]]; then
+        HOST="${HOSTPATH%%/*}"
+        DBPATH="${HOSTPATH#*/}"
+        PORT="5432"
+    fi
     
-    # Split REST at ':' for host and rest
-    HOST_PORT="${REST%%/*}"
-    DBNAME_PARAMS="/${REST#*/}"
+    # Remove leading slash from dbpath
+    DBPATH="${DBPATH#/}"
     
-    # Split HOST_PORT at ':' for host and port
-    HOST="${HOST_PORT%:*}"
-    PORT="${HOST_PORT#*:}"
-    
-    # Build POSTGRES_DSN
-    export POSTGRES_DSN="postgresql://${AUTH}@${HOST}:${PORT}/${DBNAME_PARAMS}"
+    export POSTGRES_DSN="postgresql://${USERPASS}@${HOST}:${PORT}/${DBPATH}"
     echo "[Railway init] Parsed DATABASE_URL -> POSTGRES_DSN=$POSTGRES_DSN"
 fi
 
-# Default SMTP host URL to our public domain
+# Default SMTP host URL
 export SMTP_HOST_URL="${SMTP_HOST_URL:-https://tinode-chat-production.up.railway.app}"
 
-# Use Railway's internal Postgres hostname (postgres.railway.internal) instead of TCP proxy
-# The TCP proxy (hayabusa.proxy.rlwy.net) is for external access, internal is faster
-# But if the internal doesn't work, fall back to whatever is in POSTGRES_DSN
-echo "[Railway init] POSTGRES_DSN=$POSTGRES_DSN"
-
-# Skip sample data loading on Railway (already have DB schema)
+# Skip sample data loading on Railway
 export SAMPLE_DATA=""
-export NO_DB_INIT="false"
 
 # Delegate to the official entrypoint
 exec /opt/tinode/entrypoint.sh "$@"
