@@ -15,17 +15,11 @@ jobs:
       packages: write
 
     steps:
-      - name: Deep checkout via git
+      - name: Checkout repository
         run: |
-          pwd
+          git clone --depth 1 --branch main https://github.com/${{ github.repository }} .
+          echo "=== Files ==="
           ls -la
-          # Manual full checkout bypassing actions/checkout
-          git init
-          git remote add origin https://github.com/${{ github.repository }}
-          git fetch --all --tags --depth=1
-          git checkout main
-          echo "=== Files after checkout ==="
-          find . -maxdepth 2 -type f | head -30
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
