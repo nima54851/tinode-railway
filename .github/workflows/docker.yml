@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: ${{ github.repository_owner }}/tinode-railway
 
 jobs:
   build:
@@ -36,9 +36,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_lower }}/tinode
+          images: ghcr.io/${{ github.repository_owner }}/tinode-railway
           tags: |
-            type=sha,prefix=,suffix=,format=short
+            type=sha,format=short
             type=raw,value=latest
 
       - name: Build and push
