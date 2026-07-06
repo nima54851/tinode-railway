@@ -1,12 +1,9 @@
 #!/bin/bash
-# entrypoint.sh — generates working.config and starts tinode
-# Uses envsubst for safe placeholder substitution
+# entrypoint.sh — generates working.config, initializes DB, starts tinode
 
 set -e
 
 export SMTP_HOST_URL="${SMTP_HOST_URL:-https://tinode-chat-production.up.railway.app}"
-
-# Default values for all config placeholders
 export API_KEY_SALT="${API_KEY_SALT:-change_me_abcdef123456}"
 export SERVER_STATUS_PATH="${SERVER_STATUS_PATH:-}"
 export DEFAULT_COUNTRY_CODE="${DEFAULT_COUNTRY_CODE:-US}"
@@ -34,10 +31,10 @@ if [ -f "$CONFIG_TEMPLATE" ]; then
     envsubst < "$CONFIG_TEMPLATE" > "$WORKING_CONFIG"
     echo "[main] Config generated ($(wc -c < "$WORKING_CONFIG") bytes)"
 else
-    echo "[main] WARNING: $CONFIG_TEMPLATE not found, tinode may use default config"
+    echo "[main] WARNING: $CONFIG_TEMPLATE not found"
 fi
 
-# Wait for DB to be ready
+# Wait for DB
 DB_HOST="${PGHOST:-postgres.railway.internal}"
 DB_PORT="${PGPORT:-5432}"
 echo "[main] Waiting for DB at $DB_HOST:$DB_PORT..."
@@ -46,17 +43,23 @@ if command -v nc &>/dev/null; then
     while ! nc -z -w2 "$DB_HOST" "$DB_PORT" 2>/dev/null; do
         timeout=$((timeout-1))
         if [ $timeout -le 0 ]; then
-            echo "[main] DB wait timeout, continuing anyway..."
+            echo "[main] DB wait timeout, continuing..."
             break
         fi
         sleep 1
     done
-    echo "[main] DB connection ready"
+fi
+echo "[main] DB connection ready"
+
+# ── init-db: run ONLY when RESET_DB=true ──────────────────────────────────────
+if [ "$RESET_DB" = "true" ] && [ -x "/opt/tinode/init-db" ]; then
+    echo "[init] RESET_DB=true — initializing database with data.json..."
+    cd /opt/tinode
+    /opt/tinode/init-db         --config="$WORKING_CONFIG"         --data=data.json         --reset=true         -- continuance         || echo "[init] init-db exited (this is normal after first run)"
+elif [ "$UPGRADE_DB" = "true" ] && [ -x "/opt/tinode/init-db" ]; then
+    echo "[init] UPGRADE_DB=true — upgrading database schema..."
+    /opt/tinode/init-db         --config="$WORKING_CONFIG"         --upgrade=true         --continue         || echo "[init] upgrade done or nothing to upgrade"
 fi
 
 echo "[main] Starting tinode..."
-exec /opt/tinode/tinode \
-    --config="$WORKING_CONFIG" \
-    --static_data=/opt/tinode/static \
-    --cluster_self="${CLUSTER_SELF:-}" \
-    --pprof_url="${PPROF_URL:-}"
+exec /opt/tinode/tinode     --config="$WORKING_CONFIG"     --static_data=/opt/tinode/static     --cluster_self="${CLUSTER_SELF:-}"     --pprof_url="${PPROF_URL:-}"
