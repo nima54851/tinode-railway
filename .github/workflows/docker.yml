@@ -9,7 +9,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/tinode-railway
 
 jobs:
   build:
@@ -21,6 +20,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Check files
+        run: |
+          echo "=== Repo files ===" && ls -la
+          echo "=== tinode binary ===" && ls -la tinode 2>/dev/null || echo "NOT FOUND"
+          echo "=== Dockerfile ===" && cat Dockerfile
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
