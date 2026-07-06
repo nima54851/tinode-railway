@@ -1,7 +1,7 @@
 FROM alpine:3.22
 
 RUN apk update && \
-    apk add --no-cache ca-certificates bash curl grep netcat-openbsd tzdata
+    apk add --no-cache ca-certificates bash curl grep netcat-openbsd tzdata perl
 
 WORKDIR /opt/tinode
 
@@ -17,7 +17,7 @@ RUN echo "Downloading tinode-postgres v0.25.3..." && \
 COPY config.template  /opt/tinode/config.template
 COPY data.json        /opt/tinode/data.json
 COPY entrypoint.sh   /opt/tinode/entrypoint.sh
-COPY railway-init.sh  /opt/tinode/railway-init.sh
+COPY railway-init.sh /opt/tinode/railway-init.sh
 
 RUN chmod +x /opt/tinode/entrypoint.sh /opt/tinode/railway-init.sh
 
@@ -26,5 +26,4 @@ RUN mkdir -p /opt/tinode/uploads /opt/tinode/static /opt/tinode/logs /botdata
 
 EXPOSE 6060 16060
 
-# Main container: run entrypoint which generates config and starts tinode
 CMD ["/opt/tinode/entrypoint.sh"]
