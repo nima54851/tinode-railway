@@ -7,6 +7,15 @@
 # even though the DB reset/upgrade may have succeeded.
 # We handle errors manually below.
 
+# ── CRITICAL: Force RESET_DB=false ──────────────────────────────────────────
+# Railway environment variable RESET_DB=true causes DB to reset on EVERY startup,
+# leading to an infinite restart loop. We always override it here inside the
+# container so Railway's env var has no effect.
+export RESET_DB="false"
+export UPGRADE_DB="${UPGRADE_DB:-false}"
+echo "[Railway init] RESET_DB forced to false (Railway env override)"
+# ─────────────────────────────────────────────────────────────────────────────
+
 # Use Railway's standard PG* environment variables to build POSTGRES_DSN
 if [ -n "$PGHOST" ]; then
     export POSTGRES_DSN="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE}?sslmode=${PGSSLMODE:-disable}"
@@ -32,16 +41,10 @@ elif [ -n "$DATABASE_URL" ]; then
     echo "[Railway init] Parsed DATABASE_URL -> POSTGRES_DSN=$POSTGRES_DSN"
 fi
 
-# CRITICAL: init-db requires RESET_DB and UPGRADE_DB to be set to valid values
-export RESET_DB="${RESET_DB:-false}"
-export UPGRADE_DB="${UPGRADE_DB:-false}"
-
 # Default SMTP host URL
 export SMTP_HOST_URL="${SMTP_HOST_URL:-https://tinode-chat-production.up.railway.app}"
 
 # Delegate to the official entrypoint
-# Note: init-db returns exit code 1 when SAMPLE_DATA is empty/unset,
-# even if the DB operation succeeded. We treat that as success.
 exec /opt/tinode/entrypoint.sh "$@" || {
     exit_code=$?
     # init-db returns 1 when there's no sample data but DB reset/upgrade succeeded
