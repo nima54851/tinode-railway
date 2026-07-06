@@ -1,29 +1,30 @@
 FROM alpine:3.22
 
 RUN apk update && \
-    apk add --no-cache ca-certificates bash curl
+    apk add --no-cache ca-certificates bash curl grep netcat-openbsd tzdata
 
 WORKDIR /opt/tinode
 
-# Download official Tinode v0.25.3 PostgreSQL binary directly from GitHub releases
+# Download official Tinode v0.25.3 PostgreSQL binary
 RUN echo "Downloading tinode-postgres v0.25.3..." && \
     curl -fsSL "https://github.com/tinode/chat/releases/download/v0.25.3/tinode-postgres.linux-amd64.tar.gz" \
         -o tinode-postgres.tar.gz && \
     tar -xzf tinode-postgres.tar.gz && \
     rm -f tinode-postgres.tar.gz && \
-    echo "Binary downloaded, files:" && ls -la
+    echo "Files:" && ls -la
 
-# Copy entry scripts
-COPY entrypoint.sh /opt/tinode/entrypoint.sh
-COPY config.template /opt/tinode/config.template
-COPY railway-entrypoint.sh /opt/tinode/railway-entrypoint.sh
+# Copy config, data, and scripts
+COPY config.template  /opt/tinode/config.template
+COPY data.json        /opt/tinode/data.json
+COPY entrypoint.sh   /opt/tinode/entrypoint.sh
+COPY railway-init.sh  /opt/tinode/railway-init.sh
 
-RUN chmod +x /opt/tinode/entrypoint.sh /opt/tinode/railway-entrypoint.sh
+RUN chmod +x /opt/tinode/entrypoint.sh /opt/tinode/railway-init.sh
 
 # Create required directories
 RUN mkdir -p /opt/tinode/uploads /opt/tinode/static /opt/tinode/logs /botdata
 
 EXPOSE 6060 16060
 
-# Railway-entrypoint parses DATABASE_URL and calls official entrypoint
-CMD ["/opt/tinode/railway-entrypoint.sh"]
+# Main container: run entrypoint which generates config and starts tinode
+CMD ["/opt/tinode/entrypoint.sh"]
