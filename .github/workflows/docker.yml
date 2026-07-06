@@ -3,9 +3,6 @@ name: Build and Push Docker Image
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - '.gitignore'
 
 env:
   REGISTRY: ghcr.io
@@ -18,14 +15,17 @@ jobs:
       packages: write
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Check files
+      - name: Deep checkout via git
         run: |
-          echo "=== Repo files ===" && ls -la
-          echo "=== tinode binary ===" && ls -la tinode 2>/dev/null || echo "NOT FOUND"
-          echo "=== Dockerfile ===" && cat Dockerfile
+          pwd
+          ls -la
+          # Manual full checkout bypassing actions/checkout
+          git init
+          git remote add origin https://github.com/${{ github.repository }}
+          git fetch --all --tags --depth=1
+          git checkout main
+          echo "=== Files after checkout ==="
+          find . -maxdepth 2 -type f | head -30
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
