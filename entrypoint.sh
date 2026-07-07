@@ -21,6 +21,12 @@ export AWS_S3_BUCKET="${AWS_S3_BUCKET:-}"
 export AWS_S3_ENDPOINT="${AWS_S3_ENDPOINT:-}"
 export RESET_DB="${RESET_DB:-false}"
 export UPGRADE_DB="${UPGRADE_DB:-false}"
+# Export for envsubst — these are referenced in config.template but not exported above
+export AUTH_TOKEN_KEY="${AUTH_TOKEN_KEY:-}"
+export UID_ENCRYPTION_KEY="${UID_ENCRYPTION_KEY:-}"
+export TNPG_PUSH_ENABLED="${TNPG_PUSH_ENABLED:-false}"
+export TNPG_AUTH_TOKEN="${TNPG_AUTH_TOKEN:-}"
+export TNPG_ORG="${TNPG_ORG:-}"
 
 CONFIG_TEMPLATE="/opt/tinode/config.template"
 WORKING_CONFIG="/opt/tinode/working.config"
