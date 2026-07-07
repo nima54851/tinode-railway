@@ -74,23 +74,23 @@ if auth_token_key:
         }
     }
 
-# DB section — use dsn format as full connection URL for pgx compatibility
+# DB section — v0.25.3+ requires adapters map format for pgx v5
 database_url = os.environ.get('DATABASE_URL', '')
 if database_url:
-    # pgx supports connection URL format directly
-    # Railway uses sslmode=disable which pgx understands
     config["store_config"] = {
         "uid_key": uid_encryption_key if uid_encryption_key else "",
         "max_results": 1024,
         "use_adapter": "postgres",
-        "postgres": {
-            "dsn": database_url,
-            "max_open_conns": 100,
-            "max_idle_conns": 10,
-            "conn_max_lifetime": 3600,
+        "adapters": {
+            "postgres": {
+                "dsn": database_url,
+                "max_open_conns": 100,
+                "max_idle_conns": 10,
+                "conn_max_lifetime": 3600,
+            }
         }
     }
-    print(f"[python] DB: using DSN={database_url[:60]}...", flush=True)
+    print(f"[python] DB: adapters.postgres.dsn={database_url[:60]}...", flush=True)
 
 config["logger"] = {
     "level": 3,
