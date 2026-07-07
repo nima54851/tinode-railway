@@ -1,7 +1,7 @@
 FROM alpine:3.22
 
 RUN apk update && \
-    apk add --no-cache ca-certificates bash curl grep netcat-openbsd tzdata gettext
+    apk add --no-cache ca-certificates bash curl grep netcat-openbsd tzdata gettext python3
 
 WORKDIR /opt/tinode
 
