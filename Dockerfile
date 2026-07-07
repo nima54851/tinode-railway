@@ -1,4 +1,3 @@
-# Force rebuild at 2026-07-07T11:15:48.952267
 FROM alpine:3.22
 
 RUN apk update && \
@@ -14,13 +13,14 @@ RUN echo "Downloading tinode-postgres v0.25.3..." && \
     rm -f tinode-postgres.tar.gz && \
     ls -la
 
-# Copy config and scripts
+# Copy config, scripts, and static files
 COPY config.template  /opt/tinode/config.template
 COPY data.json        /opt/tinode/data.json
 COPY entrypoint.sh   /opt/tinode/entrypoint.sh
+COPY static/         /opt/tinode/static/
 
 RUN chmod +x /opt/tinode/entrypoint.sh && \
-    mkdir -p /opt/tinode/uploads /opt/tinode/static /opt/tinode/logs /botdata
+    mkdir -p /opt/tinode/uploads /opt/tinode/logs /botdata
 
 EXPOSE 6060 16060
 
