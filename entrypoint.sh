@@ -61,11 +61,24 @@ echo "[main] DB connection ready"
 if [ "$RESET_DB" = "true" ] && [ -x "/opt/tinode/init-db" ]; then
     echo "[init] RESET_DB=true — initializing database with data.json..."
     cd /opt/tinode
-    /opt/tinode/init-db         --config="$WORKING_CONFIG"         --data=data.json         --reset=true         -- continuance         || echo "[init] init-db exited (this is normal after first run)"
+    /opt/tinode/init-db         --config="$WORKING_CONFIG"         --data=data.json         --reset=true         --continue         || echo "[init] init-db exited (this is normal after first run)"
 elif [ "$UPGRADE_DB" = "true" ] && [ -x "/opt/tinode/init-db" ]; then
     echo "[init] UPGRADE_DB=true — upgrading database schema..."
     /opt/tinode/init-db         --config="$WORKING_CONFIG"         --upgrade=true         --continue         || echo "[init] upgrade done or nothing to upgrade"
 fi
 
+# DEBUG: show actual field values in generated config
+echo "[DEBUG] === Config field values ==="
+echo "  auth.token.key  = $(grep '"key"' "$WORKING_CONFIG" | head -1 | sed 's/.*:.*"\(.*\)".*/\1/')"
+echo "  auth.uid_key    = $(grep '"uid_key"' "$WORKING_CONFIG" | head -1 | sed 's/.*:.*"\(.*\)".*/\1/')"
+echo "  api_key_salt    = $(grep '"api_key_salt"' "$WORKING_CONFIG" | head -1 | sed 's/.*:.*"\(.*\)".*/\1/')"
+echo "[DEBUG] Checking if AUTH_TOKEN_KEY is valid base64:"
+echo -n "$(grep '"key"' "$WORKING_CONFIG" | head -1 | sed 's/.*:.*"\(.*\)".*/\1/')" | base64 -d 2>&1 | head -c 20 || echo "[DEBUG] base64 decode failed"
+echo ""
+
 echo "[main] Starting tinode..."
-exec /opt/tinode/tinode     --config="$WORKING_CONFIG"     --static_data=/opt/tinode/static     --cluster_self="${CLUSTER_SELF:-}"     --pprof_url="${PPROF_URL:-}"
+exec /opt/tinode/tinode \
+    --config="$WORKING_CONFIG" \
+    --static_data=/opt/tinode/static \
+    --cluster_self="${CLUSTER_SELF:-}" \
+    --pprof_url="${PPROF_URL:-}"
