@@ -59,7 +59,7 @@ if tls_enabled and tls_domain:
         "domains": [tls_domain]
     }
 
-# Auth section — CRITICAL fields only, non-empty
+# Auth section
 if auth_token_key:
     config["auth_config"] = {
         "token": {
@@ -74,57 +74,23 @@ if auth_token_key:
         }
     }
 
-# DB section — parse DATABASE_URL into pgx v5 compatible format
+# DB section — use dsn format as full connection URL for pgx compatibility
 database_url = os.environ.get('DATABASE_URL', '')
 if database_url:
-    try:
-        p = urlparse(database_url)
-        pg_config = {
+    # pgx supports connection URL format directly
+    # Railway uses sslmode=disable which pgx understands
+    config["store_config"] = {
+        "uid_key": uid_encryption_key if uid_encryption_key else "",
+        "max_results": 1024,
+        "use_adapter": "postgres",
+        "postgres": {
+            "dsn": database_url,
             "max_open_conns": 100,
             "max_idle_conns": 10,
             "conn_max_lifetime": 3600,
         }
-        # pgx v5 uses individual params; also support DSN as fallback
-        if p.hostname:
-            pg_config["host"]     = p.hostname
-        if p.port:
-            pg_config["port"]    = str(p.port)
-        if p.username:
-            pg_config["user"]    = p.username
-        if p.password:
-            pg_config["password"] = p.password
-        if p.path:
-            pg_config["database"] = p.path.lstrip('/')
-        # Extract sslmode from query params
-        if 'sslmode=disable' in database_url:
-            pg_config["sslmode"] = "disable"
-        elif 'sslmode=require' in database_url:
-            pg_config["sslmode"] = "require"
-        else:
-            pg_config["sslmode"] = "require"
-
-        config["store_config"] = {
-            "uid_key": uid_encryption_key if uid_encryption_key else "",
-            "max_results": 1024,
-            "use_adapter": "postgres",
-            "postgres": pg_config
-        }
-        print(f"[python] DB config: host={pg_config.get('host')}, port={pg_config.get('port')}, "
-              f"database={pg_config.get('database')}", flush=True)
-    except Exception as e:
-        print(f"[python] ERROR parsing DATABASE_URL: {e}", flush=True)
-        # Fallback: use raw URL
-        config["store_config"] = {
-            "uid_key": uid_encryption_key if uid_encryption_key else "",
-            "max_results": 1024,
-            "use_adapter": "postgres",
-            "postgres": {
-                "dsn": database_url,
-                "max_open_conns": 100,
-                "max_idle_conns": 10,
-                "conn_max_lifetime": 3600,
-            }
-        }
+    }
+    print(f"[python] DB: using DSN={database_url[:60]}...", flush=True)
 
 config["logger"] = {
     "level": 3,
@@ -136,24 +102,18 @@ output_path = '/opt/tinode/working.config'
 with open(output_path, 'w') as f:
     json.dump(config, f, indent="\t", ensure_ascii=False)
 
-print(f"[python] Config written ({os.path.getsize(output_path)} bytes)", flush=True)
+size = os.path.getsize(output_path)
+print(f"[python] Config written to {output_path} ({size} bytes)", flush=True)
+
+# DUMP the actual JSON so we can verify it
+with open(output_path) as f:
+    content = f.read()
+print(f"[python] === FULL CONFIG DUMP ===", flush=True)
+print(content, flush=True)
+print(f"[python] === END CONFIG DUMP ===", flush=True)
 PYEOF
 
 WORKING_CONFIG="/opt/tinode/working.config"
-
-# Verify postgres config was written
-python3 -c "
-import json
-with open('$WORKING_CONFIG') as f:
-    c = json.load(f)
-sc = c.get('store_config', {})
-pg = sc.get('postgres', {})
-if not pg:
-    print('[ERROR] postgres config is empty!')
-    exit(1)
-print(f'[OK] postgres host={pg.get(\"host\")}, database={pg.get(\"database\")}')
-print(f'     dsn={pg.get(\"dsn\", \"(none, using individual params)\")}')
-"
 
 # Wait for DB
 DB_HOST="${PGHOST:-postgres.railway.internal}"
