@@ -92,6 +92,10 @@ if database_url:
     }
     print(f"[python] DB: adapters.postgres.dsn={database_url[:60]}...", flush=True)
 
+# Push config must be an empty array (not null/omitted) to avoid parse errors
+config["push"] = []
+config["plugins"] = []
+
 config["logger"] = {
     "level": 3,
     "out": "",
