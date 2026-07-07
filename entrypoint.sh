@@ -23,7 +23,7 @@ tls_contact       = os.environ.get('TLS_CONTACT_ADDRESS', '')
 
 config = {
     "listen": ":6060",
-    "api_path": "/",
+    "api_path": "/v2",
     "cache_control": 39600,
     "static_mount": "/",
     "grpc_listen": ":16060",
