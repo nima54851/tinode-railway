@@ -61,20 +61,28 @@ echo "[main] DB connection ready"
 if [ "$RESET_DB" = "true" ] && [ -x "/opt/tinode/init-db" ]; then
     echo "[init] RESET_DB=true — initializing database with data.json..."
     cd /opt/tinode
-    /opt/tinode/init-db         --config="$WORKING_CONFIG"         --data=data.json         --reset=true         --continue         || echo "[init] init-db exited (this is normal after first run)"
+    /opt/tinode/init-db \
+        --config="$WORKING_CONFIG" \
+        --data=data.json \
+        --reset=true \
+        --continue \
+        || echo "[init] init-db exited (this is normal after first run)"
 elif [ "$UPGRADE_DB" = "true" ] && [ -x "/opt/tinode/init-db" ]; then
     echo "[init] UPGRADE_DB=true — upgrading database schema..."
-    /opt/tinode/init-db         --config="$WORKING_CONFIG"         --upgrade=true         --continue         || echo "[init] upgrade done or nothing to upgrade"
+    /opt/tinode/init-db \
+        --config="$WORKING_CONFIG" \
+        --upgrade=true \
+        --continue \
+        || echo "[init] upgrade done or nothing to upgrade"
 fi
 
-# DEBUG: show actual field values in generated config
-echo "[DEBUG] === Config field values ==="
-echo "  auth.token.key  = $(grep '"key"' "$WORKING_CONFIG" | head -1 | sed 's/.*:.*"\(.*\)".*/\1/')"
-echo "  auth.uid_key    = $(grep '"uid_key"' "$WORKING_CONFIG" | head -1 | sed 's/.*:.*"\(.*\)".*/\1/')"
-echo "  api_key_salt    = $(grep '"api_key_salt"' "$WORKING_CONFIG" | head -1 | sed 's/.*:.*"\(.*\)".*/\1/')"
-echo "[DEBUG] Checking if AUTH_TOKEN_KEY is valid base64:"
-echo -n "$(grep '"key"' "$WORKING_CONFIG" | head -1 | sed 's/.*:.*"\(.*\)".*/\1/')" | base64 -d 2>&1 | head -c 20 || echo "[DEBUG] base64 decode failed"
-echo ""
+# DEBUG: dump raw bytes around byte 200-400 where auth section starts
+echo "[DEBUG] === Raw bytes 0-200 of config ==="
+dd if="$WORKING_CONFIG" bs=1 count=200 2>/dev/null | od -A x -t x1z | head -15
+echo "[DEBUG] === Looking for non-base64 chars in key fields ==="
+grep -E '"key":|"uid_key":|"api_key_salt":|"token":' "$WORKING_CONFIG" | head -10
+echo "[DEBUG] === Config char count ==="
+wc -c "$WORKING_CONFIG"
 
 echo "[main] Starting tinode..."
 exec /opt/tinode/tinode \
