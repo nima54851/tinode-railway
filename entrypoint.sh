@@ -76,13 +76,12 @@ elif [ "$UPGRADE_DB" = "true" ] && [ -x "/opt/tinode/init-db" ]; then
         || echo "[init] upgrade done or nothing to upgrade"
 fi
 
-# DEBUG: dump raw bytes around byte 200-400 where auth section starts
-echo "[DEBUG] === Raw bytes 0-200 of config ==="
-dd if="$WORKING_CONFIG" bs=1 count=200 2>/dev/null | od -A x -t x1z | head -15
-echo "[DEBUG] === Looking for non-base64 chars in key fields ==="
-grep -E '"key":|"uid_key":|"api_key_salt":|"token":' "$WORKING_CONFIG" | head -10
-echo "[DEBUG] === Config char count ==="
-wc -c "$WORKING_CONFIG"
+# DEBUG: dump entire config as base64 to avoid JSON quoting issues
+echo "[DEBUG] === Full config as base64 (safe to view) ==="
+base64 "$WORKING_CONFIG" | head -5
+echo "[DEBUG] === Hex of bytes 300-600 of config (around auth section) ==="
+awk 'BEGIN{for(i=300;i<=600 && (getline line < ARGV[1]) >= 0; i+=length(line)) printf "%s", line} END{print ""}' "$WORKING_CONFIG" | od -t x1 | head -5 || \
+  dd if="$WORKING_CONFIG" bs=1 skip=300 count=300 2>/dev/null | od -t x1 | head -5
 
 echo "[main] Starting tinode..."
 exec /opt/tinode/tinode \
