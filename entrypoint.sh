@@ -145,7 +145,30 @@ elif [ "$UPGRADE_DB" = "true" ] && [ -x "/opt/tinode/init-db" ]; then
         || echo "[init] upgrade done"
 fi
 
+# Ensure static directory exists with index.html
+mkdir -p /opt/tinode/static
+cat > /opt/tinode/static/index.html << 'HTMLEOF'
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Tinode Server</title>
+<style>body{font-family:system-ui,sans-serif;max-width:600px;margin:60px auto;padding:0 20px;color:#333}
+h1{color:#4a90e2}.info{background:#f0f4f8;padding:16px;border-radius:8px;margin:20px 0}
+code{background:#e8e8e8;padding:2px 6px;border-radius:4px}</style>
+</head>
+<body>
+<h1>✅ Tinode v0.25.3 Online</h1>
+<div class="info">
+<p><strong>Status:</strong> Server is running</p>
+<p>API: <code>/v2/</code></p>
+<p>Debug: <code>/debug/status</code></p>
+</div>
+</body>
+</html>
+HTMLEOF
+echo "[main] Static index.html written ($(wc -c < /opt/tinode/static/index.html) bytes)"
+
 echo "[main] Starting tinode..."
+
 exec /opt/tinode/tinode \
     --config="$WORKING_CONFIG" \
     --static_data=/opt/tinode/static \
