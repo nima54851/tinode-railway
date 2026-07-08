@@ -1,7 +1,7 @@
 # ============================================================
-# Tinode v0.25.3 + 真实 Web UI 部署
-# 二进制从 GitHub Releases 下载
-# Web UI 从 npm CDN 下载，用真实 index.html 覆盖占位符
+# Tinode v0.25.3 + 完整 Web UI
+# 二进制: GitHub Releases
+# Web UI: npm CDN → /opt/tinode/web-ui/ → 运行时覆盖 /opt/tinode/static/
 # ============================================================
 FROM alpine:3.22
 
@@ -9,37 +9,32 @@ RUN apk add --no-cache ca-certificates bash curl grep python3
 
 WORKDIR /opt/tinode
 
-# ── 从 GitHub Releases 下载官方 tinode-postgres 二进制 ──────────
+# ── 从 GitHub Releases 下载官方二进制 ──────────────────────────
 RUN echo "Downloading Tinode v0.25.3..." && \
     curl -fsSL "https://github.com/tinode/chat/releases/download/v0.25.3/tinode-postgres.linux-amd64.tar.gz" \
         -o tinode-postgres.tar.gz && \
     tar -xzf tinode-postgres.tar.gz && \
     rm -f tinode-postgres.tar.gz && \
-    echo "Binary OK"
+    echo "Binary OK" && ls /opt/tinode/
 
-# ── 下载 Web UI 从 npm ──────────────────────────────────────────
-RUN echo "Downloading web UI from npm..." && \
+# ── 从 npm CDN 下载 Web UI ──────────────────────────────────────
+RUN echo "Downloading web UI..." && \
     curl -fsSL "https://registry.npmjs.org/tinode-web/-/tinode-web-0.1.2.tgz" \
         -o /tmp/tinode-web.tgz && \
     mkdir -p /tmp/extracted && \
     tar -xzf /tmp/tinode-web.tgz -C /tmp/extracted && \
-    mkdir -p /opt/tinode/static && \
-    cp -r /tmp/extracted/package/dist/* /opt/tinode/static/ && \
+    mkdir -p /opt/tinode/web-ui && \
+    cp -r /tmp/extracted/package/dist/* /opt/tinode/web-ui/ && \
     rm -rf /tmp/extracted /tmp/tinode-web.tgz && \
-    echo "Web UI files:" && ls /opt/tinode/static/
+    echo "Web UI downloaded:" && ls /opt/tinode/web-ui/
 
-# ── 覆盖 placeholder index.html ─────────────────────────────────
-# entrypoint.sh 会生成占位符，我们在构建时覆盖它
-COPY index.html /opt/tinode/static/index.html
-RUN echo "index.html ready ($(wc -c < /opt/tinode/static/index.html) bytes)"
-
-# ── 配置文件 ────────────────────────────────────────────────────
+# ── 复制脚本和配置 ──────────────────────────────────────────────
 COPY config.template  /opt/tinode/config.template
-COPY data.json        /opt/tinode/data.json
+COPY data.json         /opt/tinode/data.json
 COPY entrypoint.sh    /opt/tinode/entrypoint.sh
 
 RUN chmod +x /opt/tinode/entrypoint.sh && \
-    mkdir -p /opt/tinode/uploads /opt/tinode/logs /botdata
+    mkdir -p /opt/tinode/static /opt/tinode/uploads /opt/tinode/logs /botdata
 
 EXPOSE 6060 16060
 
