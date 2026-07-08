@@ -1,6 +1,7 @@
 # ============================================================
-# Tinode v0.25.3 + Web UI 部署
-# 二进制从 GitHub Releases 直接下载（之前验证可行）
+# Tinode v0.25.3 + 真实 Web UI 部署
+# 二进制从 GitHub Releases 下载
+# Web UI 从 npm CDN 下载，用真实 index.html 覆盖占位符
 # ============================================================
 FROM alpine:3.22
 
@@ -9,15 +10,15 @@ RUN apk add --no-cache ca-certificates bash curl grep python3
 WORKDIR /opt/tinode
 
 # ── 从 GitHub Releases 下载官方 tinode-postgres 二进制 ──────────
-RUN echo "Downloading Tinode v0.25.3 (postgres)..." && \
+RUN echo "Downloading Tinode v0.25.3..." && \
     curl -fsSL "https://github.com/tinode/chat/releases/download/v0.25.3/tinode-postgres.linux-amd64.tar.gz" \
         -o tinode-postgres.tar.gz && \
     tar -xzf tinode-postgres.tar.gz && \
     rm -f tinode-postgres.tar.gz && \
-    ls -la
+    echo "Binary OK"
 
-# ── 下载 Web UI（从 npm CDN）─────────────────────────────────────
-RUN echo "Downloading tinode-web UI..." && \
+# ── 下载 Web UI 从 npm ──────────────────────────────────────────
+RUN echo "Downloading web UI from npm..." && \
     curl -fsSL "https://registry.npmjs.org/tinode-web/-/tinode-web-0.1.2.tgz" \
         -o /tmp/tinode-web.tgz && \
     mkdir -p /tmp/extracted && \
@@ -25,9 +26,14 @@ RUN echo "Downloading tinode-web UI..." && \
     mkdir -p /opt/tinode/static && \
     cp -r /tmp/extracted/package/dist/* /opt/tinode/static/ && \
     rm -rf /tmp/extracted /tmp/tinode-web.tgz && \
-    ls /opt/tinode/static/
+    echo "Web UI files:" && ls /opt/tinode/static/
 
-# ── 配置文件和数据 ────────────────────────────────────────────────
+# ── 覆盖 placeholder index.html ─────────────────────────────────
+# entrypoint.sh 会生成占位符，我们在构建时覆盖它
+COPY index.html /opt/tinode/static/index.html
+RUN echo "index.html ready ($(wc -c < /opt/tinode/static/index.html) bytes)"
+
+# ── 配置文件 ────────────────────────────────────────────────────
 COPY config.template  /opt/tinode/config.template
 COPY data.json        /opt/tinode/data.json
 COPY entrypoint.sh    /opt/tinode/entrypoint.sh
